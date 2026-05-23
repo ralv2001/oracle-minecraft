@@ -1,0 +1,40 @@
+name: Oracle A1 Retry
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # cada 10 minutos
+  workflow_dispatch:
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install OCI CLI
+        run: pip install oci-cli
+
+      - name: Configure OCI
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/key.pem
+          chmod 600 ~/.oci/key.pem
+          cat > ~/.oci/config << EOF
+          [DEFAULT]
+          user=${{ secrets.OCI_USER_OCID }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          tenancy=${{ secrets.OCI_TENANCY_OCID }}
+          region=sa-santiago-1
+          key_file=~/.oci/key.pem
+          EOF
+
+      - name: Try to create instance
+        run: |
+          oci compute instance launch \
+            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+            --availability-domain "Jkpi:SA-SANTIAGO-1-AD-1" \
+            --shape "VM.Standard.A1.Flex" \
+            --shape-config '{"ocpus":4,"memoryInGBs":24}' \
+            --image-id "ocid1.image.oc1.sa-santiago-1.aaaaaaaai5ja32pjngtc7qay4zz4cuhusti5wggho3nkkttm2j22z6dx7lya" \
+            --subnet-id "ocid1.subnet.oc1.sa-santiago-1.aaaaaaaaket35kbq7qnedtay7a6djbw5hdtagtn6qmvxnx6o5zhdhca7v3kq" \
+            --assign-public-ip true \
+            --ssh-authorized-keys-file <(echo "${{ secrets.OCI_SSH_PUBLIC_KEY }}") \
+            --display-name "minecraft-server" || echo "Sin capacidad, reintentando en 10 min..."
